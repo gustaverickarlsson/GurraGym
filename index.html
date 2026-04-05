@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GurraGym - Träningslogg</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f0f0f">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>GurraGym</h1>
+            <div id="week-banner"></div>
+            <div id="phase-indicator"></div>
+        </header>
+
+        <!-- REST TIMER -->
+        <div id="rest-timer" class="rest-timer hidden">
+            <div class="rest-timer-inner">
+                <div class="rest-timer-label">Vila mellan sets</div>
+                <div id="timer-display" class="timer-display">3:00</div>
+                <div class="timer-progress-bar">
+                    <div id="timer-progress" class="timer-progress"></div>
+                </div>
+                <div class="timer-buttons">
+                    <button id="timer-start" class="btn-timer">Starta 3:00</button>
+                    <button id="timer-reset" class="btn-timer-secondary">Nollställ</button>
+                </div>
+            </div>
+        </div>
+
+        <nav id="tabs">
+            <button class="tab active" data-tab="log">Logga</button>
+            <button class="tab" data-tab="program">Program</button>
+            <button class="tab" data-tab="history">Historik</button>
+            <button class="tab" data-tab="phases">Faser</button>
+        </nav>
+
+        <main>
+            <!-- LOG TAB -->
+            <section id="tab-log" class="tab-content active">
+                <div class="log-header">
+                    <select id="log-phase"></select>
+                    <select id="log-week"></select>
+                    <select id="log-day"></select>
+                </div>
+                <div id="log-save-status"></div>
+                <div id="log-exercises"></div>
+            </section>
+
+            <!-- PROGRAM TAB -->
+            <section id="tab-program" class="tab-content">
+                <div class="program-header">
+                    <select id="prog-phase"></select>
+                    <select id="prog-day"></select>
+                    <button id="btn-add-exercise" class="btn-secondary">+ Övning</button>
+                </div>
+                <div id="program-exercises"></div>
+            </section>
+
+            <!-- HISTORY TAB -->
+            <section id="tab-history" class="tab-content">
+                <div class="history-search">
+                    <input type="text" id="hist-search" placeholder="Sök övning..." autocomplete="off">
+                </div>
+                <div id="hist-exercise-list"></div>
+                <div id="history-content"></div>
+            </section>
+
+            <!-- PHASES TAB -->
+            <section id="tab-phases" class="tab-content">
+                <button id="btn-add-phase" class="btn-primary">+ Ny Fas</button>
+                <div id="phases-list"></div>
+            </section>
+        </main>
+
+        <!-- SYNC BAR -->
+        <div id="sync-bar">
+            <div class="sync-status">
+                <span id="sync-status-text">Inte synkad</span>
+            </div>
+            <div class="sync-buttons">
+                <button id="btn-sync-save" class="btn-sync" title="Spara till iCloud">
+                    <span class="sync-icon">&#8593;</span> Spara
+                </button>
+                <button id="btn-sync-load" class="btn-sync" title="Ladda från iCloud">
+                    <span class="sync-icon">&#8595;</span> Ladda
+                </button>
+            </div>
+            <input type="file" id="sync-file-input" accept=".json" style="display:none">
+        </div>
+
+        <!-- MODALS -->
+        <div id="modal-overlay" class="hidden">
+            <div id="modal" class="modal">
+                <div id="modal-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

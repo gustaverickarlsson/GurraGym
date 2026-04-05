@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0f0f0f"/>
+  <!-- Dumbbell -->
+  <rect x="156" y="195" width="200" height="20" rx="4" fill="#4a9eff"/>
+  <!-- Left plate outer -->
+  <rect x="130" y="165" width="36" height="80" rx="6" fill="#4a9eff"/>
+  <!-- Left plate inner -->
+  <rect x="110" y="175" width="28" height="60" rx="5" fill="#4a9eff"/>
+  <!-- Right plate outer -->
+  <rect x="346" y="165" width="36" height="80" rx="6" fill="#4a9eff"/>
+  <!-- Right plate inner -->
+  <rect x="374" y="175" width="28" height="60" rx="5" fill="#4a9eff"/>
+  <!-- Text -->
+  <text x="256" y="380" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="120" font-weight="800" fill="#ffffff">GG</text>
+</svg>

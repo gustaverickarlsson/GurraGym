@@ -6,8 +6,12 @@ const SYNC_FILENAME = 'GurraGym-data.json';
 
 function loadData() {
     const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
-    return { phases: [], logs: [] };
+    if (raw) {
+        const d = JSON.parse(raw);
+        if (!d.gyms) d.gyms = [];
+        return d;
+    }
+    return { phases: [], logs: [], gyms: [] };
 }
 
 function saveData(data) {
@@ -143,9 +147,14 @@ function handleFileImport(event) {
 
 function mergeData(local, imported) {
     // Smart merge: combine logs from both, prefer newer entries for same week/day
+    const localGyms = local.gyms || [];
+    const importedGyms = imported.gyms || [];
+    const mergedGyms = [...new Set([...localGyms, ...importedGyms])];
+
     const merged = {
         phases: imported.phases, // Use imported phases as source of truth for program
         logs: [],
+        gyms: mergedGyms,
         lastModified: new Date().toISOString()
     };
 
@@ -229,6 +238,145 @@ function initSync() {
 
     // Update sync time display every minute
     setInterval(updateSyncStatus, 60000);
+}
+
+// ==================== HELP MODAL ====================
+
+function showHelpModal() {
+    const overlay = document.getElementById('modal-overlay');
+    const content = document.getElementById('modal-content');
+
+    content.innerHTML = `
+        <h2>Hur man använder GurraGym</h2>
+        <div class="help-content">
+            <h3>1. Installera på din telefon</h3>
+            <p>Öppna denna länk i Safari (iPhone) eller Chrome (Android):</p>
+            <span class="help-url">https://gustaverickarlsson.github.io/GurraGym/</span>
+            <ol>
+                <li><strong>iPhone:</strong> Tryck på delningsknappen (rutan med pil uppåt) → "Lägg till på hemskärmen"</li>
+                <li><strong>Android:</strong> Tryck på menyn (⋮) → "Lägg till på startskärmen"</li>
+            </ol>
+            <p>Nu har du appen som en ikon på din hemskärm!</p>
+
+            <hr class="help-divider">
+
+            <h3>2. Kom igång</h3>
+            <ol>
+                <li>Gå till <strong>Faser</strong>-fliken och skapa en ny fas (välj 4, 6 eller 8 veckor)</li>
+                <li>Gå till <strong>Program</strong>-fliken och lägg till övningar för varje träningsdag</li>
+                <li>Gå till <strong>Logga</strong>-fliken för att börja logga dina pass</li>
+            </ol>
+
+            <hr class="help-divider">
+
+            <h3>3. Logga ditt pass</h3>
+            <ul>
+                <li>Välj rätt fas, vecka, dag och gym</li>
+                <li>Fyll i vikt och reps för varje set</li>
+                <li>Allt sparas automatiskt efter varje fält</li>
+                <li>Timern startar automatiskt efter du fyller i reps (3 min vila)</li>
+                <li>Pilar visar om du gått upp ▲ eller ner ▼ i vikt jämfört med förra veckan</li>
+            </ul>
+
+            <hr class="help-divider">
+
+            <h3>4. Gym-val</h3>
+            <p>Du kan välja vilket gym du tränar på för varje pass. Olika gym har olika utrustning, så det hjälper dig jämföra vikter rätt.</p>
+            <p>Hantera dina gym under <strong>Faser</strong>-fliken.</p>
+
+            <hr class="help-divider">
+
+            <h3>5. Synka mellan enheter</h3>
+            <ul>
+                <li><strong>Spara:</strong> Tryck "Spara" i botten → spara filen till iCloud Drive</li>
+                <li><strong>Ladda:</strong> Tryck "Ladda" på den andra enheten → välj filen från iCloud</li>
+            </ul>
+
+            <hr class="help-divider">
+
+            <h3>6. Historik</h3>
+            <p>Under <strong>Historik</strong>-fliken kan du se din progression per övning över alla faser och veckor.</p>
+
+            <hr class="help-divider">
+
+            <h3>7. Rensa all data</h3>
+            <p>Om du vill börja om helt från scratch:</p>
+            <ol>
+                <li>Öppna webbläsarens utvecklarverktyg (Safari: Inställningar → Avancerat → Webbinspektör)</li>
+                <li>Kör: <code>localStorage.clear()</code></li>
+                <li>Ladda om sidan</li>
+            </ol>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn-primary" id="modal-close-help">Stäng</button>
+        </div>
+    `;
+
+    overlay.classList.remove('hidden');
+    document.getElementById('modal-close-help').onclick = () => overlay.classList.add('hidden');
+}
+
+// ==================== GYM MANAGEMENT ====================
+
+function getGyms() {
+    return getData().gyms || [];
+}
+
+function addGym(name) {
+    const data = getData();
+    if (!data.gyms) data.gyms = [];
+    if (data.gyms.includes(name)) return;
+    data.gyms.push(name);
+    saveData(data);
+}
+
+function removeGym(name) {
+    const data = getData();
+    data.gyms = (data.gyms || []).filter(g => g !== name);
+    saveData(data);
+}
+
+function renderGymManager(container) {
+    const gyms = getGyms();
+    let html = `<div class="gym-manager">
+        <label style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Mina Gym</label>
+        <div class="gym-manager-list">`;
+
+    gyms.forEach(g => {
+        html += `<span class="gym-tag">${g}<button class="gym-remove" data-gym="${g}">×</button></span>`;
+    });
+
+    if (gyms.length === 0) {
+        html += `<span style="font-size:0.82rem; color:var(--text-dim);">Inga gym tillagda</span>`;
+    }
+
+    html += `</div>
+        <div class="gym-add-row">
+            <input type="text" id="gym-add-input" placeholder="Lägg till gym..." maxlength="30">
+            <button class="btn-secondary" id="gym-add-btn">+</button>
+        </div>
+    </div>`;
+
+    container.insertAdjacentHTML('beforeend', html);
+
+    container.querySelectorAll('.gym-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+            removeGym(btn.dataset.gym);
+            renderPhasesTab();
+        });
+    });
+
+    const addBtn = container.querySelector('#gym-add-btn');
+    const addInput = container.querySelector('#gym-add-input');
+    const doAdd = () => {
+        const name = addInput.value.trim();
+        if (name) {
+            addGym(name);
+            renderPhasesTab();
+        }
+    };
+    addBtn.addEventListener('click', doAdd);
+    addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
 }
 
 // ==================== EXERCISE CATEGORIES ====================
@@ -732,6 +880,7 @@ let state = {
     logPhase: null,
     logWeek: null,
     logDay: null,
+    logGym: '',
     progPhase: null,
     progDay: null,
     histPhase: null,
@@ -753,6 +902,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderLogTab();
     renderPhasesTab();
     showTimer();
+
+    document.getElementById('btn-help').addEventListener('click', showHelpModal);
 });
 
 // ==================== TABS ====================
@@ -899,10 +1050,26 @@ function renderLogTab() {
     }
     daySelect.value = state.logDay;
 
+    // Gym selector
+    const gymSelect = document.getElementById('log-gym');
+    const gyms = data.gyms || [];
+
+    // Check existing log for gym
+    const existingLogForGym = data.logs.find(l =>
+        l.phaseId === state.logPhase && l.week == state.logWeek && l.day === state.logDay
+    );
+    if (existingLogForGym?.gym && !state.logGym) {
+        state.logGym = existingLogForGym.gym;
+    }
+
+    gymSelect.innerHTML = `<option value="">Inget gym</option>` +
+        gyms.map(g => `<option value="${g}" ${state.logGym === g ? 'selected' : ''}>${g}</option>`).join('');
+
     // Event listeners
-    phaseSelect.onchange = () => { state.logPhase = phaseSelect.value; state.logWeek = null; state.logDay = null; renderLogTab(); };
-    weekSelect.onchange = () => { state.logWeek = Number(weekSelect.value); renderLogExercises(); };
-    daySelect.onchange = () => { state.logDay = daySelect.value; renderLogExercises(); };
+    phaseSelect.onchange = () => { state.logPhase = phaseSelect.value; state.logWeek = null; state.logDay = null; state.logGym = ''; renderLogTab(); };
+    weekSelect.onchange = () => { state.logWeek = Number(weekSelect.value); state.logGym = ''; renderLogTab(); };
+    daySelect.onchange = () => { state.logDay = daySelect.value; state.logGym = ''; renderLogTab(); };
+    gymSelect.onchange = () => { state.logGym = gymSelect.value; autoSaveLog(); };
 
     renderLogExercises();
 }
@@ -1101,6 +1268,7 @@ function autoSaveLog() {
         week: Number(state.logWeek),
         day: state.logDay,
         date: new Date().toISOString().split('T')[0],
+        gym: state.logGym || '',
         exercises
     };
 
@@ -1446,6 +1614,7 @@ function renderExerciseProgression(container, data, exerciseName) {
                 day: log.day,
                 date: log.date,
                 phaseName: phase?.name || '?',
+                gym: log.gym || '',
                 sets: ex.sets,
                 name: ex.name
             });
@@ -1488,11 +1657,13 @@ function renderExerciseProgression(container, data, exerciseName) {
             }
         }
 
+        const gymBadge = entry.gym ? `<span class="gym-badge">${entry.gym}</span>` : '';
         html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--surface2); font-size:0.88rem;">
             <div>
                 <span style="color:var(--text-dim); font-size:0.78rem;">V${entry.week}</span>
                 <span style="margin-left:4px;">${topSet.weight || '?'}kg × ${topSet.reps || '?'}</span>
                 ${topSet.notes ? `<span style="color:var(--text-dim); font-size:0.78rem; margin-left:4px;">${topSet.notes}</span>` : ''}
+                ${gymBadge}
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
                 ${arrow}
@@ -1505,7 +1676,7 @@ function renderExerciseProgression(container, data, exerciseName) {
     // Detailed table
     html += `<div class="history-summary">`;
     html += `<h4 style="color: var(--text-dim); margin-bottom: 8px; font-size: 0.85rem;">Alla Sets</h4>`;
-    html += `<table><thead><tr><th>Vecka</th><th>Fas</th><th>Set</th><th>Vikt</th><th>Reps</th><th>Trend</th></tr></thead><tbody>`;
+    html += `<table><thead><tr><th>Vecka</th><th>Fas</th><th>Gym</th><th>Set</th><th>Vikt</th><th>Reps</th><th>Trend</th></tr></thead><tbody>`;
 
     entries.forEach((entry, entryIdx) => {
         const prevEntry = entryIdx > 0 ? entries[entryIdx - 1] : null;
@@ -1532,6 +1703,7 @@ function renderExerciseProgression(container, data, exerciseName) {
             html += `<tr>
                 ${si === 0 ? `<td rowspan="${entry.sets.length}" style="font-weight:600;">V${entry.week}</td>` : ''}
                 ${si === 0 ? `<td rowspan="${entry.sets.length}" style="font-size:0.75rem; color:var(--text-dim);">${entry.phaseName}</td>` : ''}
+                ${si === 0 ? `<td rowspan="${entry.sets.length}" style="font-size:0.75rem; color:var(--text-dim);">${entry.gym || '-'}</td>` : ''}
                 <td>S${si + 1}</td>
                 <td>${set.weight || '-'}</td>
                 <td>${set.reps || '-'}</td>
@@ -1559,6 +1731,13 @@ function renderPhasesTab() {
     }
 
     container.innerHTML = '';
+
+    // Gym manager at the top
+    const gymSection = document.createElement('div');
+    gymSection.style.cssText = 'grid-column: 1 / -1; margin-bottom: 8px;';
+    renderGymManager(gymSection);
+    container.appendChild(gymSection);
+
     data.phases.forEach((phase, idx) => {
         const card = document.createElement('div');
         card.className = 'phase-card';

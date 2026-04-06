@@ -39,10 +39,91 @@ header {
     padding: 16px 0 8px;
 }
 
+.header-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
 header h1 {
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--accent);
+}
+
+.btn-help {
+    position: absolute;
+    right: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-help:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* HELP MODAL */
+.help-content h3 {
+    color: var(--accent);
+    font-size: 0.95rem;
+    margin-top: 16px;
+    margin-bottom: 6px;
+}
+
+.help-content h3:first-child {
+    margin-top: 0;
+}
+
+.help-content p, .help-content li {
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.help-content ol, .help-content ul {
+    padding-left: 20px;
+    margin-bottom: 8px;
+}
+
+.help-content li {
+    margin-bottom: 4px;
+}
+
+.help-content code {
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    color: var(--accent);
+}
+
+.help-content .help-url {
+    display: block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 0.85rem;
+    color: var(--accent);
+    word-break: break-all;
+    user-select: all;
+}
+
+.help-content .help-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
 }
 
 #phase-indicator {
@@ -1120,7 +1201,79 @@ select:focus {
     color: var(--accent);
 }
 
-/* Responsive */
+/* GYM BADGE */
+.gym-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    margin-left: 6px;
+}
+
+/* GYM MANAGER */
+.gym-manager {
+    margin-top: 12px;
+}
+
+.gym-manager-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.gym-tag {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.82rem;
+    color: var(--text);
+}
+
+.gym-tag .gym-remove {
+    background: none;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 2px;
+    opacity: 0.7;
+}
+
+.gym-tag .gym-remove:hover {
+    opacity: 1;
+}
+
+.gym-add-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.gym-add-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
+.gym-add-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Responsive - small */
 @media (max-width: 400px) {
     .log-header, .program-header, .history-header {
         flex-direction: column;
@@ -1128,5 +1281,96 @@ select:focus {
 
     .set-row input {
         padding: 6px 8px;
+    }
+}
+
+/* Responsive - desktop */
+@media (min-width: 768px) {
+    #app {
+        max-width: 900px;
+        padding: 0 24px;
+    }
+
+    header h1 {
+        font-size: 1.8rem;
+    }
+
+    #tabs {
+        max-width: 500px;
+        margin: 16px auto;
+    }
+
+    .tab {
+        padding: 12px 0;
+        font-size: 0.9rem;
+    }
+
+    .log-header, .program-header {
+        gap: 12px;
+    }
+
+    .exercise-card, .prog-exercise-card, .phase-card, .history-entry {
+        padding: 18px 20px;
+    }
+
+    .set-row {
+        gap: 12px;
+    }
+
+    .set-row input {
+        padding: 10px 12px;
+        font-size: 0.95rem;
+    }
+
+    .set-row .weight-input {
+        width: 90px;
+    }
+
+    .set-row .reps-input {
+        width: 70px;
+    }
+
+    .modal {
+        max-width: 600px;
+        padding: 28px;
+    }
+
+    #sync-bar {
+        max-width: 924px;
+        padding: 12px 24px;
+    }
+
+    .history-summary td, .history-summary th {
+        padding: 10px 14px;
+    }
+}
+
+@media (min-width: 1024px) {
+    #app {
+        max-width: 1100px;
+        padding: 0 32px;
+    }
+
+    /* Two-column layout for log exercises */
+    #log-exercises {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    #program-exercises {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    #phases-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    #sync-bar {
+        max-width: 1132px;
     }
 }

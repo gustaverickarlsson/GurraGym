@@ -4,20 +4,43 @@ const DB_KEY = 'gurragym_data';
 const SYNC_KEY = 'gurragym_sync';
 const SYNC_FILENAME = 'GurraGym-data.json';
 
+let _dataCache = null;
+let _savePending = false;
+
 function loadData() {
+    if (_dataCache) return _dataCache;
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
-        const d = JSON.parse(raw);
-        if (!d.gyms) d.gyms = [];
-        return d;
+        _dataCache = JSON.parse(raw);
+        if (!_dataCache.gyms) _dataCache.gyms = [];
+    } else {
+        _dataCache = { phases: [], logs: [], gyms: [] };
     }
-    return { phases: [], logs: [], gyms: [] };
+    return _dataCache;
 }
 
 function saveData(data) {
-    data.lastModified = new Date().toISOString();
-    localStorage.setItem(DB_KEY, JSON.stringify(data));
-    markUnsyncedChanges();
+    _dataCache = data;
+    if (_savePending) return;
+    _savePending = true;
+    requestAnimationFrame(() => {
+        data.lastModified = new Date().toISOString();
+        localStorage.setItem(DB_KEY, JSON.stringify(data));
+        _savePending = false;
+        markUnsyncedChanges();
+    });
+}
+
+function flushSave() {
+    if (_savePending && _dataCache) {
+        _dataCache.lastModified = new Date().toISOString();
+        localStorage.setItem(DB_KEY, JSON.stringify(_dataCache));
+        _savePending = false;
+    }
+}
+
+function invalidateCache() {
+    _dataCache = null;
 }
 
 function getData() {
@@ -26,6 +49,14 @@ function getData() {
 
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function debounce(fn, ms) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), ms);
+    };
 }
 
 // ==================== iCLOUD FILE SYNC ====================
@@ -48,6 +79,7 @@ function markUnsyncedChanges() {
 }
 
 function exportToFile() {
+    flushSave();
     const data = getData();
     const exportData = {
         ...data,
@@ -56,7 +88,15 @@ function exportToFile() {
         _app: 'GurraGym'
     };
 
+    const btn = document.getElementById('btn-sync-save');
+    btn.classList.add('saving');
+    btn.disabled = true;
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+
+    const finish = () => {
+        setTimeout(() => { btn.classList.remove('saving'); btn.disabled = false; }, 600);
+    };
 
     // Use share API on mobile for direct iCloud save
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], SYNC_FILENAME, { type: 'application/json' })] })) {
@@ -67,12 +107,14 @@ function exportToFile() {
         }).then(() => {
             markSynced('saved');
             showToast('Sparad till fil!');
+            finish();
         }).catch(() => {
-            // Fallback to download
             downloadFile(blob);
+            finish();
         });
     } else {
         downloadFile(blob);
+        finish();
     }
 }
 
@@ -121,6 +163,7 @@ function handleFileImport(event) {
 
             // Merge or replace
             const mergedData = mergeData(currentData, imported);
+            invalidateCache();
             localStorage.setItem(DB_KEY, JSON.stringify(mergedData));
 
             markSynced('loaded');
@@ -904,6 +947,12 @@ document.addEventListener('DOMContentLoaded', () => {
     showTimer();
 
     document.getElementById('btn-help').addEventListener('click', showHelpModal);
+
+    // Ensure pending saves are flushed before page unload
+    window.addEventListener('beforeunload', flushSave);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flushSave();
+    });
 });
 
 // ==================== TABS ====================
@@ -1143,9 +1192,9 @@ function renderLogExercises() {
             html += `
                 <div class="set-row">
                     <span class="set-label">S${s + 1}</span>
-                    <input type="text" class="weight-input" placeholder="${prevSet?.weight || 'kg'}" value="${weight}" data-set="${s}" data-field="weight">
+                    <input type="text" inputmode="decimal" class="weight-input" placeholder="${prevSet?.weight || 'kg'}" value="${weight}" data-set="${s}" data-field="weight">
                     <span style="color: var(--text-dim);">×</span>
-                    <input type="text" class="reps-input" placeholder="${prevSet?.reps || 'reps'}" value="${reps}" data-set="${s}" data-field="reps">
+                    <input type="text" inputmode="numeric" class="reps-input" placeholder="${prevSet?.reps || 'reps'}" value="${reps}" data-set="${s}" data-field="reps">
                     <input type="text" class="set-notes-input" placeholder="anteckning" value="${notes}" data-set="${s}" data-field="notes">
                     ${progressionHtml}
                 </div>
@@ -1158,11 +1207,10 @@ function renderLogExercises() {
         card.innerHTML = html;
         container.appendChild(card);
 
-        // Auto-save on any input change
+        // Auto-save on any input change (debounced)
         card.querySelectorAll('input').forEach(input => {
-            input.addEventListener('blur', () => {
-                autoSaveLog();
-            });
+            input.addEventListener('blur', debouncedAutoSave);
+            input.addEventListener('input', debouncedAutoSave);
         });
 
         // Auto-start timer when user fills in reps (leaving a reps field)
@@ -1182,13 +1230,25 @@ function renderLogExercises() {
             const setHtml = `
                 <div class="set-row">
                     <span class="set-label">S${setCount + 1}</span>
-                    <input type="text" class="weight-input" placeholder="kg" value="" data-set="${setCount}" data-field="weight">
+                    <input type="text" inputmode="decimal" class="weight-input" placeholder="kg" value="" data-set="${setCount}" data-field="weight">
                     <span style="color: var(--text-dim);">×</span>
-                    <input type="text" class="reps-input" placeholder="reps" value="" data-set="${setCount}" data-field="reps">
+                    <input type="text" inputmode="numeric" class="reps-input" placeholder="reps" value="" data-set="${setCount}" data-field="reps">
                     <input type="text" class="set-notes-input" placeholder="anteckning" value="" data-set="${setCount}" data-field="notes">
                 </div>
             `;
             setsContainer.insertAdjacentHTML('beforeend', setHtml);
+            // Attach save listeners to new inputs
+            const newRow = setsContainer.lastElementChild;
+            newRow.querySelectorAll('input').forEach(inp => {
+                inp.addEventListener('blur', debouncedAutoSave);
+                inp.addEventListener('input', debouncedAutoSave);
+            });
+            newRow.querySelector('.reps-input').addEventListener('blur', () => {
+                if (newRow.querySelector('.reps-input').value.trim()) {
+                    resetTimer();
+                    startTimer();
+                }
+            });
         });
     });
 }
@@ -1223,6 +1283,8 @@ function findPreviousLog(data, phaseId, currentWeek, dayName) {
     const prevWeek = phase.weeks[weekIdx - 1];
     return data.logs.find(l => l.phaseId === phaseId && l.week == prevWeek && l.day === dayName) || null;
 }
+
+let _saveStatusTimer = null;
 
 function autoSaveLog() {
     const data = getData();
@@ -1280,14 +1342,17 @@ function autoSaveLog() {
 
     saveData(data);
 
-    // Show save indicator
+    // Show save indicator (debounce the fade-out)
     const statusEl = document.getElementById('log-save-status');
     if (statusEl) {
         statusEl.textContent = 'Sparat';
         statusEl.style.opacity = '1';
-        setTimeout(() => { statusEl.style.opacity = '0'; }, 1500);
+        clearTimeout(_saveStatusTimer);
+        _saveStatusTimer = setTimeout(() => { statusEl.style.opacity = '0'; }, 1500);
     }
 }
+
+const debouncedAutoSave = debounce(autoSaveLog, 300);
 
 // ==================== PROGRAM TAB ====================
 

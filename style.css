@@ -282,6 +282,7 @@ select:focus {
     padding: 14px;
     margin-bottom: 12px;
     border: 1px solid var(--border);
+    contain: content;
 }
 
 .exercise-card-header {
@@ -333,10 +334,15 @@ select:focus {
     padding: 8px 10px;
     font-size: 0.9rem;
     width: 80px;
+    transition: border-color 0.15s;
 }
 
 .set-row input:focus {
     outline: none;
+    border-color: var(--accent);
+}
+
+.set-row input:active {
     border-color: var(--accent);
 }
 
@@ -967,7 +973,8 @@ select:focus {
     color: var(--green);
     height: 18px;
     margin-bottom: 4px;
-    transition: opacity 0.3s;
+    transition: opacity 0.5s ease;
+    will-change: opacity;
 }
 
 /* HISTORY SEARCH */
@@ -1199,6 +1206,11 @@ select:focus {
 .btn-sync.loading {
     border-color: var(--accent);
     color: var(--accent);
+}
+
+.btn-sync:disabled {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 /* GYM BADGE */

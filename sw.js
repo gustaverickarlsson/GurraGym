@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gurragym-v2';
+const CACHE_NAME = 'gurragym-v3';
 const ASSETS = [
     '/',
     '/index.html',

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self';">
     <title>GurraGym - Träningslogg</title>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
@@ -49,10 +50,14 @@
             <!-- LOG TAB -->
             <section id="tab-log" class="tab-content active">
                 <div class="log-header">
-                    <select id="log-phase"></select>
-                    <select id="log-week"></select>
-                    <select id="log-day"></select>
-                    <select id="log-gym"></select>
+                    <label class="sr-only" for="log-phase">Fas</label>
+                    <select id="log-phase" aria-label="Fas"></select>
+                    <label class="sr-only" for="log-week">Vecka</label>
+                    <select id="log-week" aria-label="Vecka"></select>
+                    <label class="sr-only" for="log-day">Dag</label>
+                    <select id="log-day" aria-label="Dag"></select>
+                    <label class="sr-only" for="log-gym">Gym</label>
+                    <select id="log-gym" aria-label="Gym"></select>
                 </div>
                 <div id="log-save-status"></div>
                 <div id="log-exercises"></div>
@@ -61,8 +66,10 @@
             <!-- PROGRAM TAB -->
             <section id="tab-program" class="tab-content">
                 <div class="program-header">
-                    <select id="prog-phase"></select>
-                    <select id="prog-day"></select>
+                    <label class="sr-only" for="prog-phase">Programfas</label>
+                    <select id="prog-phase" aria-label="Programfas"></select>
+                    <label class="sr-only" for="prog-day">Programdag</label>
+                    <select id="prog-day" aria-label="Programdag"></select>
                     <button id="btn-add-exercise" class="btn-secondary">+ Övning</button>
                 </div>
                 <div id="program-exercises"></div>

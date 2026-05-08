@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+
+# Local export/backups and artifacts
+GurraGym-data.json
+*.exe

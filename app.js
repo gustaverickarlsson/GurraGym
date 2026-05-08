@@ -7,12 +7,41 @@ const SYNC_FILENAME = 'GurraGym-data.json';
 let _dataCache = null;
 let _savePending = false;
 
+function safeJsonParse(raw, fallback) {
+    try {
+        return JSON.parse(raw);
+    } catch (err) {
+        console.warn('Failed to parse JSON payload, using fallback.', err);
+        return fallback;
+    }
+}
+
+function sanitizeDataShape(value) {
+    if (!value || typeof value !== 'object') {
+        return { phases: [], logs: [], gyms: [] };
+    }
+    return {
+        ...value,
+        phases: Array.isArray(value.phases) ? value.phases : [],
+        logs: Array.isArray(value.logs) ? value.logs : [],
+        gyms: Array.isArray(value.gyms) ? value.gyms : [],
+    };
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function loadData() {
     if (_dataCache) return _dataCache;
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
-        _dataCache = JSON.parse(raw);
-        if (!_dataCache.gyms) _dataCache.gyms = [];
+        _dataCache = sanitizeDataShape(safeJsonParse(raw, { phases: [], logs: [], gyms: [] }));
     } else {
         _dataCache = { phases: [], logs: [], gyms: [] };
     }
@@ -63,7 +92,7 @@ function debounce(fn, ms) {
 
 function getSyncInfo() {
     const raw = localStorage.getItem(SYNC_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return safeJsonParse(raw, { lastSaved: null, lastLoaded: null, hasUnsyncedChanges: false });
     return { lastSaved: null, lastLoaded: null, hasUnsyncedChanges: false };
 }
 
@@ -142,10 +171,10 @@ function handleFileImport(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const imported = JSON.parse(e.target.result);
+            const imported = sanitizeDataShape(safeJsonParse(e.target.result, null));
 
             // Validate structure
-            if (!imported.phases || !imported.logs) {
+            if (!Array.isArray(imported?.phases) || !Array.isArray(imported?.logs)) {
                 alert('Ogiltig fil - saknar data.');
                 return;
             }
@@ -188,38 +217,82 @@ function handleFileImport(event) {
     event.target.value = '';
 }
 
+function normalizeLogEntry(log) {
+    if (!log || typeof log !== 'object') return null;
+    if (!log.phaseId || !log.day) return null;
+    const week = Number(log.week);
+    if (!Number.isFinite(week)) return null;
+
+    return {
+        ...log,
+        id: typeof log.id === 'string' ? log.id : '',
+        phaseId: log.phaseId,
+        week,
+        day: String(log.day),
+        date: log.date || '',
+        gym: log.gym || '',
+        exercises: Array.isArray(log.exercises) ? log.exercises : [],
+    };
+}
+
 function mergeData(local, imported) {
-    // Smart merge: combine logs from both, prefer newer entries for same week/day
+    // Smart merge: combine logs from both, prefer newer entries for same unique log id.
     const localGyms = local.gyms || [];
     const importedGyms = imported.gyms || [];
     const mergedGyms = [...new Set([...localGyms, ...importedGyms])];
+    const localPhaseMap = new Map((local.phases || []).map(p => [p.id, p]));
+    const importedPhaseMap = new Map((imported.phases || []).map(p => [p.id, p]));
+    const mergedPhases = [...(local.phases || [])];
+
+    importedPhaseMap.forEach((phase, phaseId) => {
+        const localPhase = localPhaseMap.get(phaseId);
+        if (!localPhase) {
+            mergedPhases.push(phase);
+            return;
+        }
+        const localMod = local.lastModified || '';
+        const importedMod = imported.lastModified || imported._exported || '';
+        if (importedMod > localMod) {
+            const idx = mergedPhases.findIndex(p => p.id === phaseId);
+            if (idx >= 0) mergedPhases[idx] = phase;
+        }
+    });
 
     const merged = {
-        phases: imported.phases, // Use imported phases as source of truth for program
+        phases: mergedPhases,
         logs: [],
         gyms: mergedGyms,
         lastModified: new Date().toISOString()
     };
 
-    // Build map of all logs by unique key (phaseId + week + day)
+    // Build map of all logs by stable id; for id-less legacy entries, use a strict fallback key.
     const logMap = new Map();
 
-    // Add local logs first
-    local.logs.forEach(log => {
-        const key = `${log.phaseId}_${log.week}_${log.day}`;
+    const fallbackKey = (log) => `${log.phaseId}_${log.week}_${log.day}_${log.gym || ''}_${JSON.stringify(log.exercises || [])}`;
+
+    // Add local logs first.
+    (local.logs || []).forEach(rawLog => {
+        const log = normalizeLogEntry(rawLog);
+        if (!log) return;
+        const key = log.id ? `id:${log.id}` : `fallback:${fallbackKey(log)}`;
         logMap.set(key, log);
     });
 
-    // Override with imported logs (or add new ones)
-    imported.logs.forEach(log => {
-        const key = `${log.phaseId}_${log.week}_${log.day}`;
+    // Override with imported logs (or add new ones) if imported entry is newer.
+    (imported.logs || []).forEach(rawLog => {
+        const log = normalizeLogEntry(rawLog);
+        if (!log) return;
+        const key = log.id ? `id:${log.id}` : `fallback:${fallbackKey(log)}`;
         const existing = logMap.get(key);
-        if (!existing || (log.date >= (existing.date || ''))) {
+        if (!existing || ((log.date || '') >= (existing.date || ''))) {
             logMap.set(key, log);
         }
     });
 
-    merged.logs = Array.from(logMap.values());
+    merged.logs = Array.from(logMap.values()).map((log) => ({
+        ...log,
+        id: log.id || generateId(),
+    }));
     return merged;
 }
 
@@ -732,12 +805,11 @@ function seedExampleData() {
 
 function getCurrentWeekNumber() {
     const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 1);
-    const dayOfYear = Math.floor((now - start) / 86400000) + 1;
-    // ISO week: week 1 is the week with the first Thursday
-    const jan1Day = start.getDay() || 7; // Mon=1, Sun=7
-    const weekNum = Math.ceil((dayOfYear + jan1Day - 1) / 7);
-    return weekNum;
+    const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = utcDate.getUTCDay() || 7;
+    utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+    return Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
 function getTodayDayName() {
@@ -887,7 +959,7 @@ let deferredPrompt = null;
 
 function initPWA() {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js');
+        navigator.serviceWorker.register('./sw.js');
     }
 
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -902,7 +974,13 @@ function showInstallBanner() {
     if (!document.getElementById('pwa-install')) {
         const banner = document.createElement('div');
         banner.id = 'pwa-install';
-        banner.innerHTML = `<span>Installera GurraGym på din telefon</span><button id="pwa-install-btn">Installera</button>`;
+        const label = document.createElement('span');
+        label.textContent = 'Installera GurraGym på din telefon';
+        const button = document.createElement('button');
+        button.id = 'pwa-install-btn';
+        button.textContent = 'Installera';
+        banner.appendChild(label);
+        banner.appendChild(button);
         document.querySelector('header').after(banner);
 
         document.getElementById('pwa-install-btn').addEventListener('click', async () => {
@@ -1111,8 +1189,18 @@ function renderLogTab() {
         state.logGym = existingLogForGym.gym;
     }
 
-    gymSelect.innerHTML = `<option value="">Inget gym</option>` +
-        gyms.map(g => `<option value="${g}" ${state.logGym === g ? 'selected' : ''}>${g}</option>`).join('');
+    gymSelect.innerHTML = '';
+    const emptyGymOption = document.createElement('option');
+    emptyGymOption.value = '';
+    emptyGymOption.textContent = 'Inget gym';
+    gymSelect.appendChild(emptyGymOption);
+    gyms.forEach((gym) => {
+        const option = document.createElement('option');
+        option.value = gym;
+        option.textContent = gym;
+        option.selected = state.logGym === gym;
+        gymSelect.appendChild(option);
+    });
 
     // Event listeners
     phaseSelect.onchange = () => { state.logPhase = phaseSelect.value; state.logWeek = null; state.logDay = null; state.logGym = ''; renderLogTab(); };
@@ -1318,11 +1406,17 @@ function autoSaveLog() {
         });
     });
 
-    if (!hasAnyData) return;
-
     const existingIdx = data.logs.findIndex(l =>
         l.phaseId === state.logPhase && l.week == state.logWeek && l.day === state.logDay
     );
+
+    if (!hasAnyData) {
+        if (existingIdx >= 0) {
+            data.logs.splice(existingIdx, 1);
+            saveData(data);
+        }
+        return;
+    }
 
     const logEntry = {
         id: existingIdx >= 0 ? data.logs[existingIdx].id : generateId(),
@@ -1416,9 +1510,9 @@ function renderProgramExercises() {
         card.innerHTML = `
             <div class="prog-exercise-header">
                 <div class="prog-exercise-info">
-                    <h3>${ex.name} ${getCategoryBadge(exCat)}</h3>
-                    <div class="scheme-text">${ex.scheme}</div>
-                    ${ex.notes ? `<div class="notes-text">${ex.notes}</div>` : ''}
+                    <h3>${escapeHtml(ex.name)} ${getCategoryBadge(exCat)}</h3>
+                    <div class="scheme-text">${escapeHtml(ex.scheme)}</div>
+                    ${ex.notes ? `<div class="notes-text">${escapeHtml(ex.notes)}</div>` : ''}
                     <div class="scheme-text">${ex.numSets} sets${ex.restPauseParts ? ' (Rest Pause)' : ''}</div>
                 </div>
                 <div class="prog-exercise-actions">
@@ -1459,7 +1553,7 @@ function showExerciseModal(editIdx) {
     content.innerHTML = `
         <h2>${exercise ? 'Redigera Övning' : 'Ny Övning'}</h2>
         <label>Namn</label>
-        <input type="text" id="ex-name" value="${exercise?.name || ''}" placeholder="t.ex. Bench Press">
+        <input type="text" id="ex-name" value="${escapeHtml(exercise?.name || '')}" placeholder="t.ex. Bench Press">
         <label>Kategori</label>
         <div class="category-picker" id="cat-picker">
             ${Object.entries(CATEGORIES).map(([key, c]) =>
@@ -1467,11 +1561,11 @@ function showExerciseModal(editIdx) {
             ).join('')}
         </div>
         <label>Upplägg (scheme)</label>
-        <input type="text" id="ex-scheme" value="${exercise?.scheme || ''}" placeholder="t.ex. 3 sets RPT (6-8, 6-8, 8-10)">
+        <input type="text" id="ex-scheme" value="${escapeHtml(exercise?.scheme || '')}" placeholder="t.ex. 3 sets RPT (6-8, 6-8, 8-10)">
         <label>Antal sets</label>
         <input type="number" id="ex-sets" value="${exercise?.numSets || 3}" min="1" max="20">
         <label>Anteckningar</label>
-        <input type="text" id="ex-notes" value="${exercise?.notes || ''}" placeholder="Valfritt">
+        <input type="text" id="ex-notes" value="${escapeHtml(exercise?.notes || '')}" placeholder="Valfritt">
         <div class="modal-buttons">
             <button class="btn-secondary" id="modal-cancel">Avbryt</button>
             <button class="btn-primary" id="modal-save">Spara</button>
@@ -1820,7 +1914,7 @@ function renderPhasesTab() {
 
         card.innerHTML = `
             <div class="phase-card-header">
-                <span class="phase-card-name">${phase.name}${isCurrent ? ' <span style="font-size:0.75rem; color:var(--green);">(aktiv)</span>' : ''}${warningHtml}</span>
+                <span class="phase-card-name">${escapeHtml(phase.name)}${isCurrent ? ' <span style="font-size:0.75rem; color:var(--green);">(aktiv)</span>' : ''}${warningHtml}</span>
                 <div>
                     <button class="btn-small btn-edit-phase" data-idx="${idx}">Redigera</button>
                     <button class="btn-danger btn-del-phase" data-idx="${idx}">Ta bort</button>
@@ -1868,7 +1962,7 @@ function showPhaseModal(editIdx) {
     content.innerHTML = `
         <h2>${isEdit ? 'Redigera Fas' : 'Ny Fas'}</h2>
         <label>Namn</label>
-        <input type="text" id="phase-name" value="${phase?.name || ''}" placeholder="t.ex. Phase Four">
+        <input type="text" id="phase-name" value="${escapeHtml(phase?.name || '')}" placeholder="t.ex. Phase Four">
 
         ${isEdit ? '' : `
         <label>Längd</label>
@@ -1884,11 +1978,11 @@ function showPhaseModal(editIdx) {
 
         ${isEdit ? `
         <label>Veckor (kommaseparerade)</label>
-        <input type="text" id="phase-weeks-manual" value="${phase.weeks.join(', ')}">
+        <input type="text" id="phase-weeks-manual" value="${escapeHtml(phase.weeks.join(', '))}">
         ` : ''}
 
         <label>Dagar (kommaseparerade)</label>
-        <input type="text" id="phase-days" value="${phase?.days.map(d => d.name).join(', ') || 'Måndag, Onsdag, Fredag'}" placeholder="t.ex. Måndag, Onsdag, Fredag">
+        <input type="text" id="phase-days" value="${escapeHtml(phase?.days.map(d => d.name).join(', ') || 'Måndag, Onsdag, Fredag')}" placeholder="t.ex. Måndag, Onsdag, Fredag">
 
         <div class="modal-buttons">
             <button class="btn-secondary" id="modal-cancel">Avbryt</button>
